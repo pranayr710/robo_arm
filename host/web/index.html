@@ -3,205 +3,119 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Robotic Arm — Control</title>
+<title>Robotic Arm — Live Control</title>
 <style>
   :root{
-    --bg:#0e1116; --panel:#171c24; --line:#2a323d; --txt:#e6edf3;
-    --muted:#8b98a5; --accent:#4aa8ff; --ok:#3fb950; --danger:#f85149;
+    --bg:#0b0f14; --panel:#141a22; --panel2:#0f151c; --line:#242e3a;
+    --txt:#e6edf3; --muted:#8b98a5; --accent:#5b9bf0; --ok:#3fb950;
+    --danger:#e5484d; --amber:#e3b341;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;
-       background:var(--bg);color:var(--txt)}
-  header{display:flex;align-items:center;gap:12px;padding:14px 20px;
-         border-bottom:1px solid var(--line)}
-  header h1{font-size:16px;margin:0;font-weight:600}
-  .badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16202b,var(--bg));
+       color:var(--txt);font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line)}
+  header h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .badge.ok{color:var(--accent);border-color:var(--accent)}
   .badge.live{color:var(--ok);border-color:var(--ok)}
-  .badge.mock{color:var(--accent);border-color:var(--accent)}
   .badge.off{color:var(--muted)}
-  .wrap{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:16px;max-width:980px}
-  @media(max-width:820px){.wrap{grid-template-columns:1fr}}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  canvas{width:100%;height:auto;display:block;border-radius:8px;background:#0b0e13}
-  .row{display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px}
-  .row label{color:var(--muted)}
-  .row .val{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600}
+  .tabs{display:flex;gap:8px;margin-left:auto}
+  .tab{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:#111823;
+       color:var(--muted);cursor:pointer;font-weight:600;font-size:13px}
+  .tab:hover{border-color:var(--accent);color:var(--txt)}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#06101f}
+  .wrap{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:18px;max-width:1120px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 12px}
+  canvas#stage{width:100%;height:auto;display:block;border-radius:10px;background:#0a0e13}
+  #camwrap{display:none;position:relative;margin-bottom:16px}
+  #camwrap.show{display:block}
+  #camwrap video,#camwrap canvas{width:100%;border-radius:10px;transform:scaleX(-1)}
+  #camwrap canvas{position:absolute;inset:0}
+  #blink{position:absolute;top:8px;left:10px;background:rgba(0,0,0,.55);color:var(--accent);
+         padding:3px 8px;border-radius:7px;font-size:12px;font-variant-numeric:tabular-nums}
+  .srow{display:flex;justify-content:space-between;margin:12px 0 4px;color:var(--muted)}
+  .srow b{color:var(--accent);font-variant-numeric:tabular-nums}
   input[type=range]{width:100%;accent-color:var(--accent)}
-  .btns{display:flex;gap:10px;margin-top:18px}
-  button{flex:1;padding:11px;border-radius:9px;border:1px solid var(--line);
-          background:#202834;color:var(--txt);font-weight:600;cursor:pointer}
-  button:hover{border-color:var(--accent)}
-  button.estop{background:var(--danger);border-color:var(--danger);color:#fff}
-  button.release{background:transparent}
-  .estop-banner{display:none;margin-top:12px;padding:8px 12px;border-radius:8px;
-     background:rgba(248,81,73,.12);color:var(--danger);border:1px solid var(--danger);
-     font-weight:600;text-align:center}
-  .estop-banner.on{display:block}
-  .telemetry{font-size:12px;color:var(--muted);margin-top:14px;
-     font-variant-numeric:tabular-nums}
+  .panel{display:none}.panel.show{display:block}
+  #pad{position:relative;height:180px;border-radius:12px;border:1px dashed var(--line);
+       background:repeating-linear-gradient(0deg,#0e141c,#0e141c 19px,#121a24 20px),
+                  repeating-linear-gradient(90deg,#0e141c,#0e141c 19px,#121a24 20px);
+       cursor:crosshair;touch-action:none}
+  #paddot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+          background:var(--accent);box-shadow:0 0 16px var(--accent);left:50%;top:50%}
+  .hint{color:var(--muted);font-size:12px;margin-top:8px}
+  .btns{display:flex;gap:10px;margin-top:16px}
+  button.act{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:#1a2330;
+             color:var(--txt);font-weight:700;cursor:pointer}
+  button.act:hover{border-color:var(--accent)}
+  button.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+  .writebox{display:flex;gap:8px;margin-top:10px}
+  .writebox input{flex:2;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0a0e13;color:var(--txt)}
+  .transcript{margin-top:14px;padding:12px;border-radius:10px;background:#0a0e13;border:1px solid var(--line)}
+  .transcript .big{font-size:26px;font-weight:800;letter-spacing:2px;min-height:32px}
+  .transcript .pend{color:var(--amber);font-family:ui-monospace,monospace;font-size:18px;letter-spacing:4px}
+  .log{margin-top:14px;font-size:12px;color:var(--muted);min-height:18px}
 </style>
 </head>
 <body>
 <header>
-  <h1>🤖 Robotic Arm — Control &amp; Visualization</h1>
-  <span id="conn" class="badge off">connecting…</span>
+  <h1>🤖 Robotic Arm — Live Control</h1>
+  <span id="conn" class="badge off">offline</span>
+  <div class="tabs">
+    <div class="tab" data-mode="manual">Manual</div>
+    <div class="tab" data-mode="trackpad">Trackpad</div>
+    <div class="tab" data-mode="hand">Hand-Follow</div>
+    <div class="tab" data-mode="morse">Blink-Morse</div>
+  </div>
 </header>
 
 <div class="wrap">
   <div class="card">
-    <canvas id="view" width="560" height="420"></canvas>
-    <div class="telemetry" id="tel">live angles —</div>
+    <h2>Arm &amp; paper</h2>
+    <div id="camwrap">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <span id="blink">blink —</span>
+    </div>
+    <canvas id="stage" width="520" height="400"></canvas>
   </div>
 
   <div class="card">
-    <div id="sliders"></div>
-    <div class="btns">
-      <button id="home">Home</button>
-      <button id="release" class="release">Release</button>
-    </div>
-    <div class="btns">
-      <button id="estop" class="estop">■ EMERGENCY STOP</button>
-    </div>
-    <div id="banner" class="estop-banner">⚠ EMERGENCY STOP ACTIVE — press Release</div>
+    <h2>Controls</h2>
 
-    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-    <div class="row"><label>Mode</label><span class="val" id="modeval">manual</span></div>
-    <div class="btns">
-      <button id="m-manual">Manual</button>
-      <button id="m-hand">Hand-follow</button>
-      <button id="m-joy">Joystick</button>
+    <div class="panel show" data-for="manual" id="sliders"></div>
+
+    <div class="panel" data-for="trackpad">
+      <div id="pad"><div id="paddot"></div></div>
+      <div class="hint">Drag anywhere on the pad — X = base rotation, Y = shoulder reach.</div>
     </div>
 
-    <div class="row" style="margin-top:16px"><label>Write message (Morse)</label></div>
     <div class="btns">
-      <input id="wtext" type="text" value="SOS" maxlength="40"
-             style="flex:2;padding:9px;border-radius:9px;border:1px solid var(--line);background:#0b0e13;color:var(--txt)">
-      <button id="wbtn" style="flex:1">Write ✍</button>
+      <button class="act" id="home">Home</button>
+      <button class="act" id="release">Release</button>
+      <button class="act danger" id="estop">■ STOP</button>
     </div>
-    <div class="telemetry" id="tel2">obstacle: — cm</div>
+
+    <div style="margin-top:18px">
+      <h2>Write a message (Morse)</h2>
+      <div class="writebox">
+        <input id="wtext" type="text" value="SOS" maxlength="24" />
+        <button class="act" id="wbtn">Write ✍</button>
+      </div>
+      <div class="transcript">
+        <div class="pend" id="pending">·</div>
+        <div class="big" id="transcript">—</div>
+      </div>
+      <div class="btns"><button class="act" id="clearmorse">Clear message</button></div>
+    </div>
+
+    <div class="log" id="log">ready.</div>
   </div>
 </div>
 
-<script>
-const SERVOS = [
-  {name:"Base",     ch:0, min:0, max:180, init:90},
-  {name:"Gripper",  ch:1, min:0, max:180, init:60},
-  {name:"Shoulder", ch:2, min:0, max:180, init:90},
-  {name:"Elbow",    ch:3, min:0, max:180, init:90},
-];
-
-// ---- build sliders ----------------------------------------------------
-const slidersEl = document.getElementById("sliders");
-const sliders = [];
-SERVOS.forEach(s => {
-  const row = document.createElement("div"); row.className = "row";
-  row.innerHTML = `<label>${s.name}</label><span class="val" id="v${s.ch}">${s.init}°</span>`;
-  const inp = document.createElement("input");
-  inp.type = "range"; inp.min = s.min; inp.max = s.max; inp.value = s.init;
-  inp.oninput = () => {
-    document.getElementById("v"+s.ch).textContent = inp.value + "°";
-    send({cmd:"S", ch:s.ch, angle:+inp.value});
-  };
-  slidersEl.appendChild(row); slidersEl.appendChild(inp);
-  sliders[s.ch] = inp;
-});
-
-// ---- websocket --------------------------------------------------------
-let ws, live = {angles:[90,60,90,90], estop:0};
-function connect(){
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen  = () => setConn(true, false);
-  ws.onclose = () => { setConn(false); setTimeout(connect, 1000); };
-  ws.onmessage = e => {
-    live = JSON.parse(e.data);
-    setConn(true, live.mock);
-    document.getElementById("banner").classList.toggle("on", !!live.estop);
-    document.getElementById("tel").textContent =
-      "live angles — base " + live.angles[0] + "°  grip " + live.angles[1] +
-      "°  shoulder " + live.angles[2] + "°  elbow " + live.angles[3] + "°";
-    const m = live.joystick ? "joystick" : (live.mode || "manual");
-    document.getElementById("modeval").textContent = m;
-    const d = live.dist;
-    document.getElementById("tel2").textContent =
-      "obstacle: " + (d >= 999 ? "— (no sensor)" : d + " cm");
-    // sliders only make sense in manual mode
-    const manual = (m === "manual");
-    SERVOS.forEach(s => sliders[s.ch].disabled = !manual);
-  };
-}
-function send(obj){ if(ws && ws.readyState===1) ws.send(JSON.stringify(obj)); }
-function setConn(ok, mock){
-  const b = document.getElementById("conn");
-  if(!ok){ b.className="badge off"; b.textContent="disconnected"; }
-  else if(mock){ b.className="badge mock"; b.textContent="MOCK (no hardware)"; }
-  else { b.className="badge live"; b.textContent="LIVE"; }
-}
-document.getElementById("home").onclick    = () => {
-  send({cmd:"H"});
-  SERVOS.forEach(s => { sliders[s.ch].value=s.init; document.getElementById("v"+s.ch).textContent=s.init+"°"; });
-};
-document.getElementById("estop").onclick   = () => send({cmd:"E"});
-document.getElementById("release").onclick = () => send({cmd:"R"});
-
-document.getElementById("m-manual").onclick = () => { send({cmd:"J",on:false}); send({cmd:"MODE",mode:"manual"}); };
-document.getElementById("m-hand").onclick   = () => { send({cmd:"J",on:false}); send({cmd:"MODE",mode:"hand"}); };
-document.getElementById("m-joy").onclick    = () => { send({cmd:"MODE",mode:"manual"}); send({cmd:"J",on:true}); };
-document.getElementById("wbtn").onclick     = () => send({cmd:"WRITE",text:document.getElementById("wtext").value});
-connect();
-
-// ---- 2D visualization (side view + base dial) -------------------------
-const cv = document.getElementById("view"), ctx = cv.getContext("2d");
-const D = Math.PI/180;
-function draw(){
-  const [base, grip, shoulder, elbow] = live.angles;
-  ctx.clearRect(0,0,cv.width,cv.height);
-
-  // ground + pedestal
-  const px = 200, py = 330, L1 = 110, L2 = 90;
-  ctx.strokeStyle="#2a323d"; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(40,py+22); ctx.lineTo(cv.width-40,py+22); ctx.stroke();
-  ctx.fillStyle="#202834"; ctx.fillRect(px-26,py,52,22);
-
-  // link 1 (shoulder) — angle from +x, y-up
-  const a1 = shoulder*D;
-  const ex = px + L1*Math.cos(a1), ey = py - L1*Math.sin(a1);
-  // link 2 (elbow) continues from link 1
-  const a2 = a1 + (elbow-90)*D;
-  const wx = ex + L2*Math.cos(a2), wy = ey - L2*Math.sin(a2);
-
-  const seg = (x1,y1,x2,y2,c) => { ctx.strokeStyle=c; ctx.lineWidth=9; ctx.lineCap="round";
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
-  const joint = (x,y) => { ctx.fillStyle="#e6edf3"; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.fill(); };
-
-  seg(px,py,ex,ey,"#4aa8ff");
-  seg(ex,ey,wx,wy,"#7cc4ff");
-  joint(px,py); joint(ex,ey);
-
-  // gripper claw at wrist — opening from gripper angle (30 closed .. 160 open)
-  const open = Math.max(0, Math.min(1,(grip-30)/130));
-  const spread = (6 + open*22);
-  const gdir = a2, perp = gdir + Math.PI/2;
-  for(const s of [1,-1]){
-    const bx = wx + Math.cos(perp)*spread*s, by = wy - Math.sin(perp)*spread*s;
-    const tx = bx + Math.cos(gdir)*26,       ty = by - Math.sin(gdir)*26;
-    seg(wx,wy,bx,by,"#9aa7b4"); seg(bx,by,tx,ty,"#9aa7b4");
-  }
-
-  // base rotation dial (top-view), top-right
-  const cx=470, cy=90, r=42;
-  ctx.strokeStyle="#2a323d"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
-  const ba=(base-90)*D; // 90° = pointing up
-  ctx.strokeStyle="#4aa8ff"; ctx.lineWidth=4; ctx.beginPath();
-  ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.sin(ba)*r, cy-Math.cos(ba)*r); ctx.stroke();
-  ctx.fillStyle="#8b98a5"; ctx.font="11px system-ui"; ctx.textAlign="center";
-  ctx.fillText("base "+base+"°", cx, cy+r+16);
-
-  if(live.estop){ ctx.fillStyle="rgba(248,81,73,.9)"; ctx.font="bold 16px system-ui";
-    ctx.textAlign="left"; ctx.fillText("● E-STOP", 20, 30); }
-
-  requestAnimationFrame(draw);
-}
-draw();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
