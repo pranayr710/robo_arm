@@ -208,16 +208,6 @@ This project demonstrates practical understanding of:
 
 ---
 
-## 🤝 Authors & Contributors
-
-| Name | GitHub |
-|------|--------|
-| **Navadeep** | [@navadeep555](https://github.com/navadeep555) |
-| **Kukkadapu Datta** | [@datta0312](https://github.com/datta0312) |
-| **Masannagari Nandan Reddy** | [@nandanreddy386](https://github.com/nandanreddy386) |
-| **K Srivarshith** | [@varshith2326](https://github.com/varshith2326) |
-
----
 
 ## 📜 License
 
