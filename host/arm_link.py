@@ -73,6 +73,9 @@ class ArmLink:
     def set_mode(self, joystick):
         self._send(f"J {1 if joystick else 0}")
 
+    def send_line(self, line):
+        self._send(str(line))
+
     def close(self):
         self._alive = False
         self.ser.close()
@@ -108,6 +111,7 @@ class MockArmLink:
     def release(self): self.state["estop"] = 0
     def request_state(self): pass
     def set_mode(self, joystick): self.state["mode"] = 1 if joystick else 0
+    def send_line(self, line): pass   # mock: firmware-only commands are no-ops
 
     def _ramp_loop(self):
         while self._alive:

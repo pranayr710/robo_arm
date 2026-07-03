@@ -13,6 +13,10 @@ Works identically over USB-TTL now and over HC-05 Bluetooth later.
 | `E`          | Emergency stop — freeze in place          | `E`          |
 | `R`          | Release e-stop                            | `R`          |
 | `J n`        | Control mode: `J 1` = joystick, `J 0` = remote/serial | `J 1` |
+| `V step`     | Motion speed = degrees per step (1–20)    | `V 5`        |
+| `C ch a b`   | Calibrate servo `ch`: pulse µs at 0° (`a`) and 180° (`b`) | `C 0 500 2500` |
+| `P`          | Ping → replies `PONG`                     | `P`          |
+| `I`          | Info → replies `INFO v3.0 servos 4`       | `I`          |
 | `?`          | Request one telemetry line                | `?`          |
 
 In joystick mode the arm's base/shoulder follow the analog stick, and `A`/`S`

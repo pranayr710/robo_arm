@@ -18,12 +18,16 @@ All grounds must be common. Servos run off an **external 5V / 3A** supply —
 | Ultrasonic Trigger  | PB0       | GPIO out          | HC-SR04 TRIG |
 | Ultrasonic Echo     | PB6       | TIM4_CH1 (input)  | HC-SR04 ECHO** |
 
-\* **HC-05 RX is 5V-logic** — put a divider on PA9→HC-05 RX (1kΩ series + 2kΩ
-to GND) to drop 3.3V… actually STM32 3.3V TX is fine into HC-05 RX; the divider
-matters the other way isn't needed. Keep HC-05 VCC at 5V, its TX (3.3V) → PA10.
+\* **HC-05:** VCC at 5V (the ZS-040 carrier regulates internally). Its RX and
+TX are 3.3V logic — connect **directly** to PA9/PA10, no divider needed in
+either direction.
 
-\*\* **HC-SR04 ECHO is 5V** — divide it down to 3.3V before PB6
-(e.g. 1kΩ series + 2kΩ to GND) or you can damage the pin.
+\*\* **HC-SR04 ECHO outputs 5V**, but **PB6 is 5V-tolerant** on the F103, so a
+direct connection is safe. A 1kΩ series + 2kΩ-to-GND divider is optional
+belt-and-braces. **Joystick VCC must be 3.3V** (PA4/PA5 are NOT 5V-tolerant).
+
+> The complete, authoritative build guide with exact part models and
+> step-by-step assembly is **[HARDWARE.md](HARDWARE.md)**.
 
 ## Why PA4/PA5 for the joystick
 

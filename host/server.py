@@ -66,6 +66,8 @@ def _handle(msg):
         link.release()
     elif cmd == "J":
         link.set_mode(bool(msg.get("on")))
+    elif cmd == "RAW":                       # pass a raw protocol line to firmware
+        link.send_line(str(msg.get("line", "")))
 
 
 # static app is mounted last so /ws wins

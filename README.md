@@ -9,10 +9,13 @@ An embedded systems project implemented in C using the **STM32F103C8T6 (Blue Pil
 Capabilities:
 
 - Real-time **hand-follow** (webcam → arm mirrors your hand)
+- **Gesture control** (✊✋👍✌️) and **voice control** ("write hello", "wave", "home")
+- **AI assistant console** — natural-language commands → arm actions
 - **Eye-blink Morse** → the arm writes the message on paper (for paralysed users)
-- **Web UI** to visualize + control the arm
+- **Web UI** to visualize + control the arm; **routines** (wave / pick / scan)
 - **Bluetooth** (HC-05) + **analog joystick** teleop
-- **Ultrasonic emergency-stop** safety
+- **Ultrasonic emergency-stop** + link-loss failsafe
+- **Hardware-agnostic firmware** — set servo count, pins, calibration & limits in `config.h`
 - Original: pick-and-place, alphabet writing, smooth PWM motion
 
 ---
@@ -23,20 +26,31 @@ Two tiers: the STM32 is a fast, safe *servo server*; all vision/planning runs
 on a host PC that streams simple serial commands.
 
 ```
-firmware/arm_control.c   New non-blocking firmware (replaces object.c/write.c):
-                         TIM3 1kHz control loop, IRQ UART, joystick ADC,
-                         HC-SR04 e-stop, live telemetry.
+firmware/config.h        Hardware config: servo count, pins, calibration, limits, toggles.
+firmware/arm_control.c   Non-blocking firmware: TIM3 1kHz loop, IRQ UART command
+                         server, joystick ADC, HC-SR04 e-stop, failsafe, telemetry.
+host/server.py           Serves the web app + optional serial bridge to the STM32.
 host/arm_link.py         Serial link (real + mock arm).
-host/server.py           FastAPI + WebSocket web control/visualization hub.
-host/web/index.html      The UI (2D arm view, sliders, modes, Morse writer).
-host/hand_tracker.py     MediaPipe hand → arm angles (Phase 2).
-host/morse.py            Morse encode/decode + accumulator.
-host/writer.py           Turns a message into pen strokes the arm draws.
-host/blink_morse.py      Eye-blink → Morse → arm writes (Phase 4).
-docs/wiring.md           Full pin map + wiring + safety.
-docs/bluetooth_app.md    HC-05 phone control (MIT App Inventor).
-PROTOCOL.md              The serial command protocol.
+host/web/index.html      The UI shell (cards, tabs, styles).
+host/web/js/config.js    All browser-side tunables (geometry, maps, timings).
+host/web/js/arm.js       ArmModel — source of truth: servo angles, ramp, FK/IK.
+host/web/js/renderer.js  Canvas scene (arm + paper + marks), robust frame loop.
+host/web/js/plotter.js   Pen-plotter writing engine (Morse marks on paper).
+host/web/js/vision.js    Webcam + MediaPipe: hand-follow, gesture, blink detect.
+host/web/js/routines.js  Choreography (wave / pick / nod / scan / home).
+host/web/js/nlp.js       Natural-language command understanding.
+host/web/js/voice.js     Web Speech API voice control.
+host/web/js/morse.js     Morse encode/decode + accumulator.
+host/web/js/bridge.js    Throttled WebSocket link to the server/STM32.
+host/web/js/app.js       Wires everything + UI.
+docs/HARDWARE.md         ★ Exact part models, every pin connection, build-from-scratch guide.
+docs/BUILD_PLAN.md       Bill of materials (₹8–10k) + hardware bring-up steps.
+docs/wiring.md           Pin map + wiring + safety.  docs/bluetooth_app.md  HC-05 phone app.
+docs/demo_runbook.md     Click-by-click demo order.  PROTOCOL.md  serial protocol.
 ```
+
+(Python `hand_tracker.py` / `blink_morse.py` / `writer.py` / `morse.py` remain
+as an alternative host-side path; the browser app above is the primary one.)
 
 ### Run it
 
