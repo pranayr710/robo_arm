@@ -1,11 +1,6 @@
-# Core: web UI + serial link (Phases 0–1, and control for all phases)
-pyserial>=3.5
-fastapi>=0.110
-uvicorn>=0.27
-websockets>=12.0
-
-# Vision features (Phase 2 hand-follow, Phase 4 blink-Morse).
-# Optional — the server + UI run without these (mock/manual/joystick still work).
-opencv-python>=4.8
-mediapipe>=0.10
-numpy>=1.24
+# Task 3 PC bridge (host/task3_write.py) - runs on the laptop, for the webcam.
+# The embedded firmware is C (firmware/*.c) and needs none of this.
+pyserial
+opencv-python
+mediapipe
+numpy
