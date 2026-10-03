@@ -243,37 +243,51 @@ def mode_blink(arm):
         vert = d(p[1],p[5]) + d(p[2],p[4]); horiz = 2.0*d(p[0],p[3])
         return vert/horiz if horiz else 0.0
 
+    GREEN=(90,220,120); RED=(70,70,240); AMBER=(60,200,245)
+    WHITE=(245,245,245); CYAN=(240,220,90); GREY=(175,175,175)
+    def txt(img,s,xy,scale=0.7,col=WHITE,th=2):
+        cv2.putText(img,s,xy,cv2.FONT_HERSHEY_SIMPLEX,scale,col,th,cv2.LINE_AA)
+
     writer = Writer(arm); writer.home()
     face = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True,
             min_detection_confidence=0.6, min_tracking_confidence=0.6)
     cap = cv2.VideoCapture(0)
-    pending = ""; text = ""; writing = [False]
+    pending = ""; text = ""; last_letter = "-"; writing = [False]
     closed = False; close_t = 0.0; last_act = time.time(); letter_done = False
-    print("BLINK MORSE  - short=dot  long=dash  pause=letter  longer pause=write  (q quits)")
 
-    def commit_word():
-        nonlocal text, pending
+    def add_letter():
+        nonlocal pending, text, last_letter
         if pending:
-            text += MORSE.get(pending, "?"); pending = ""
+            ch = MORSE.get(pending, "?"); text += ch; last_letter = ch; pending = ""
+    def commit_word():
+        nonlocal text
+        add_letter()
         msg = text.strip()
         if msg and not writing[0]:
             writing[0] = True
-            print(f"\n[writing] {msg!r}")
-            writer.write_text(msg)              # blocks camera briefly - fine
+            print(f"[writing] {msg!r}")
+            writer.write_text(msg)              # arm writes; camera pauses briefly
             text = ""; writing[0] = False
 
+    print("BLINK MORSE  - short=dot  long=dash  pause=letter  longer pause=write  (q quits)")
     while True:
         ok, frame = cap.read()
         if not ok: continue
         frame = cv2.flip(frame, 1); h, w = frame.shape[:2]
         res = face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        now = time.time()
+        now = time.time(); ear_val = 0.0; have_face = False
+
         if res.multi_face_landmarks:
+            have_face = True
             lm = res.multi_face_landmarks[0].landmark
-            e = (ear(lm, LEFT, w, h) + ear(lm, RIGHT, w, h)) / 2.0
-            if e < EAR_THRESH and not closed:
+            ear_val = (ear(lm, LEFT, w, h) + ear(lm, RIGHT, w, h)) / 2.0
+            # draw the eye landmarks used for blink detection
+            for i in LEFT + RIGHT:
+                cv2.circle(frame, (int(lm[i].x*w), int(lm[i].y*h)), 2, RED if closed else GREEN, -1)
+            # blink state machine
+            if ear_val < EAR_THRESH and not closed:
                 closed, close_t = True, now
-            elif e >= EAR_THRESH and closed:
+            elif ear_val >= EAR_THRESH and closed:
                 closed = False; dur = now - close_t
                 if dur >= DEBOUNCE_S:
                     sym = "." if dur < DOT_MAX else "-"
@@ -282,14 +296,31 @@ def mode_blink(arm):
             if not closed:
                 gap = now - last_act
                 if gap > LETTER_GAP_S and not letter_done and pending:
-                    text += MORSE.get(pending, "?"); pending = ""; letter_done = True
-                    print(" ", end="", flush=True)
+                    add_letter(); letter_done = True; print(" ", end="", flush=True)
                 if gap > WORD_GAP_S and text and not writing[0]:
                     commit_word(); last_act = now
-            cv2.putText(frame, f"EAR {e:.2f}", (10,28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (80,200,255), 2)
-        cv2.putText(frame, (text + "[" + pending + "]")[-32:], (10, h-18),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (60,255,120), 2)
-        cv2.imshow("Blink Morse (q quits)", frame)
+
+        # ---------------- info panel (bottom strip) ----------------
+        ov = frame.copy(); cv2.rectangle(ov, (0, h-152), (w, h), (24,24,28), -1)
+        cv2.addWeighted(ov, 0.65, frame, 0.35, 0, frame)
+        y = h-118
+        if not have_face:
+            txt(frame, "No face detected - look at the camera", (16, y), 0.72, AMBER)
+        else:
+            txt(frame, f"EYES: {'CLOSED' if closed else 'OPEN'}", (16, y), 0.8, RED if closed else GREEN)
+            txt(frame, f"EAR {ear_val:.2f}  (blink < {EAR_THRESH})", (250, y), 0.6, GREY)
+        prev = MORSE.get(pending, "?") if pending else "-"
+        txt(frame, f"SYMBOL: {pending or '-'}  ->  {prev}", (16, y+36), 0.7, CYAN)
+        txt(frame, f"LAST: {last_letter}", (430, y+36), 0.7, WHITE)
+        txt(frame, f"MESSAGE: {(text or '-')[-22:]}", (16, y+70), 0.75, GREEN)
+        if writing[0]:
+            txt(frame, "WRITING...", (430, y+70), 0.75, AMBER)
+        txt(frame, "short=dot  long=dash  pause=letter  long pause=write   [q] quit",
+            (16, h-10), 0.48, GREY, 1)
+        if closed:
+            cv2.circle(frame, (w-38, 40), 16, RED, -1); txt(frame, "BLINK", (w-150, 48), 0.7, RED)
+
+        cv2.imshow("HASTHA - Blink Morse", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'): break
     cap.release(); cv2.destroyAllWindows()
 
