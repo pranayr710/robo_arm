@@ -3,9 +3,9 @@
 An embedded systems project on the **STM32F401CCU6 (Black Pill)**, programmed in
 **Keil + CMSIS (C)**. A 4-DOF servo arm with three features:
 
-- **Task 1 — Auto pick & place:** an IR sensor detects an object → shows it on the
-  LCD → HC-SR04 measures the distance → the arm computes the angle, picks the
-  object and places it at a fixed position.
+- **Task 1 — Auto pick & place:** an IR sensor detects an object → shows the status
+  (serial monitor + LED, optional 7-segment) → HC-SR04 measures the distance → the
+  arm computes the angle, picks the object and places it at a fixed position.
 - **Task 2 — Potentiometer control:** a potentiometer rotates the base servo
   (ADC 0–4095 mapped to 0–180°).
 - **Task 3 — Blink-to-write:** a laptop webcam reads **eye-blink Morse code** and

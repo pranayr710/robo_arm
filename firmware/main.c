@@ -15,7 +15,7 @@
  *    PB0       GPIO out     -> HC-SR04 TRIG
  *    PB6       TIM4_CH1     -> HC-SR04 ECHO (input capture)
  *    PB7       GPIO in      -> IR sensor OUT
- *    PB8/PB9   I2C1 SCL/SDA -> 16x2 I2C LCD (PCF8574)
+ *    PB8/PB9   FREE          -> reserved for a 7-segment display driver
  *    PC13      GPIO out     -> onboard status LED
  *    (PA5      ADC1_IN5     -> optional solar-battery monitor, see BATT_MON)
  *
@@ -50,7 +50,6 @@ enum { BASE = 0, SHOULDER = 1, ELBOW = 2, GRIPPER = 3 };
 #define GRIP_CLOSE    150
 #define PICK_Z_MM     (-70.0f)   /* gripper height at the table (below shoulder) */
 
-#define LCD_ADDR      0x27       /* PCF8574 7-bit addr (try 0x3F if blank) */
 #define IR_PRESENT    (((GPIOB->IDR >> 7) & 1u) == 0u)   /* active-low output */
 
 /* #define BATT_MON  1 */        /* uncomment to enable solar-battery monitor on PA5 */
@@ -120,14 +119,13 @@ static void gpio_init(void)
     GPIOA->MODER |= (3u<<10);                                    /* PA5 analog */
 #endif
 
-    /* PB0 out, PB6 AF2(TIM4), PB7 in(pull-up), PB8/PB9 AF4(I2C1, open-drain) */
-    GPIOB->MODER &= ~((3u<<0)|(3u<<12)|(3u<<14)|(3u<<16)|(3u<<18));
-    GPIOB->MODER |=  ((1u<<0)|(2u<<12)|(2u<<16)|(2u<<18));
-    GPIOB->OTYPER |= (1u<<8)|(1u<<9);
-    GPIOB->PUPDR  &= ~((3u<<14)|(3u<<16)|(3u<<18));
-    GPIOB->PUPDR  |=  ((1u<<14)|(1u<<16)|(1u<<18));              /* pull-ups */
-    GPIOB->AFR[0] &= ~(0xFu<<24); GPIOB->AFR[0] |= (2u<<24);    /* PB6 AF2 */
-    GPIOB->AFR[1] &= ~((0xFu<<0)|(0xFu<<4)); GPIOB->AFR[1] |= (4u<<0)|(4u<<4); /* PB8/9 AF4 */
+    /* PB0 out (ultrasonic TRIG), PB6 AF2 (TIM4 echo), PB7 in pull-up (IR).
+       PB8/PB9 left FREE for your future 7-segment display driver. */
+    GPIOB->MODER &= ~((3u<<0)|(3u<<12)|(3u<<14));
+    GPIOB->MODER |=  ((1u<<0)|(2u<<12));                         /* PB0 out, PB6 AF, PB7 input */
+    GPIOB->PUPDR  &= ~(3u<<14);
+    GPIOB->PUPDR  |=  (1u<<14);                                  /* PB7 pull-up */
+    GPIOB->AFR[0] &= ~(0xFu<<24); GPIOB->AFR[0] |= (2u<<24);    /* PB6 AF2 (TIM4) */
 
     /* PC13 output (LED) */
     GPIOC->MODER &= ~(3u<<26); GPIOC->MODER |= (1u<<26);
@@ -203,55 +201,28 @@ void USART1_IRQHandler(void)
     }
 }
 
-/* ============================ init: I2C + LCD ======================== */
-static void i2c1_init(void)
+/* ==================== display (UART + LED + 7-seg hook) =============== *
+ * No LCD is required and nothing blocks if no display is attached.
+ * Status is printed over UART (open a serial monitor @115200 to read it) and
+ * shown on the onboard PC13 LED. When you know your 7-segment TYPE, add it
+ * inside disp_num() at the marked hook (TM1637 would use PB8=CLK, PB9=DIO).  */
+static void disp_msg(const char* s){ uart_puts(s); uart_putc('\r'); uart_putc('\n'); }
+static void disp_num(const char* label, int v)
 {
-    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
-    I2C1->CR1 = (1u<<15); I2C1->CR1 = 0;       /* soft reset */
-    I2C1->CR2   = 16;                          /* PCLK1 = 16 MHz */
-    I2C1->CCR   = 80;                          /* 100 kHz standard */
-    I2C1->TRISE = 17;
-    I2C1->CR1  |= 1;                           /* PE */
-}
-static void i2c_write(uint8_t addr, uint8_t data)
-{
-    while (I2C1->SR2 & (1u<<1));               /* BUSY */
-    I2C1->CR1 |= (1u<<8);                      /* START */
-    while (!(I2C1->SR1 & (1u<<0)));            /* SB */
-    I2C1->DR = (uint8_t)(addr << 1);
-    while (!(I2C1->SR1 & (1u<<1)));            /* ADDR */
-    (void)I2C1->SR2;
-    while (!(I2C1->SR1 & (1u<<7)));            /* TXE */
-    I2C1->DR = data;
-    while (!(I2C1->SR1 & (1u<<2)));            /* BTF */
-    I2C1->CR1 |= (1u<<9);                      /* STOP */
-}
-#define LCD_BL 0x08
-static void lcd_nib(uint8_t nib, uint8_t rs)
-{
-    uint8_t b = (nib & 0xF0) | LCD_BL | (rs ? 1u : 0u);
-    i2c_write(LCD_ADDR, b | 0x04); delay_us(2);       /* EN high */
-    i2c_write(LCD_ADDR, b & ~0x04); delay_us(60);     /* EN low  */
-}
-static void lcd_send(uint8_t v, uint8_t rs){ lcd_nib(v & 0xF0, rs); lcd_nib((uint8_t)(v<<4), rs); }
-static void lcd_cmd(uint8_t c){ lcd_send(c,0); if(c==1||c==2) delay_ms(2); }
-static void lcd_ch(char c){ lcd_send((uint8_t)c,1); }
-static void lcd_init(void)
-{
-    delay_ms(50);
-    lcd_nib(0x30,0); delay_ms(5); lcd_nib(0x30,0); delay_us(150); lcd_nib(0x30,0);
-    lcd_nib(0x20,0);                       /* 4-bit */
-    lcd_cmd(0x28); lcd_cmd(0x0C); lcd_cmd(0x01); lcd_cmd(0x06);
-}
-static void lcd_at(uint8_t row, uint8_t col){ lcd_cmd(0x80 | (col + (row ? 0x40 : 0))); }
-static void lcd_str(const char*s){ while(*s) lcd_ch(*s++); }
-static void lcd_line(uint8_t row, const char*s){ lcd_at(row,0); lcd_str("                "); lcd_at(row,0); lcd_str(s); }
-static void lcd_num(uint8_t row, const char*label, int v)
-{
-    char b[17]; int i=0; while(label[i]&&i<12){b[i]=label[i];i++;}
-    if(v<0){b[i++]='-'; v=-v;}
-    char d[6]; int n=0; if(v==0)d[n++]='0'; while(v){d[n++]=(char)('0'+v%10); v/=10;}
-    while(n) b[i++]=d[--n]; b[i]=0; lcd_line(row,b);
+    int val = v;
+    uart_puts(label);
+    char d[6]; int n = 0;
+    if (v < 0) { uart_putc('-'); v = -v; }
+    if (v == 0) d[n++] = '0';
+    while (v) { d[n++] = (char)('0' + v % 10); v /= 10; }
+    while (n) uart_putc(d[--n]);
+    uart_putc('\r'); uart_putc('\n');
+    /* ===== 7-SEGMENT HOOK (fill once the display type is known) =====
+     *   TM1637 4-digit (2 pins): tm1637_show(val);
+     *   bare single digit (7 GPIO): seg_show(val % 10);
+     *   bare 4-digit multiplexed: seg_set(val);  // refreshed in a timer ISR
+     * Until then the value is on UART + the LED blinks for activity.        */
+    (void)val;
 }
 
 /* ============================ SysTick start ========================== */
@@ -282,12 +253,13 @@ static int ik(float r, float z, int16_t* sh, int16_t* el)
 /* --- TASK 2: potentiometer -> base servo (ADC 0..4095 -> 0..180) --- */
 static void task2(void)
 {
-    lcd_line(0, "TASK2 POT->BASE");
+    disp_msg("TASK2 POT->BASE");
+    int16_t last = -1;
     while (1) {
         uint16_t v = adc_read(4);                 /* PA4 = ADC_IN4 */
         int16_t ang = (int16_t)(((int32_t)v * 180) / 4095);
         set_angle(BASE, ang);
-        lcd_num(1, "Base:", ang);
+        if (ang != last) { disp_num("Base: ", ang); last = ang; }  /* only on change */
         GPIOC->ODR ^= (1u<<13);
         delay_ms(60);
     }
@@ -298,22 +270,21 @@ static void task1(void)
 {
     arm_home(); move_settle(700);
     while (1) {
-        lcd_line(0, "Waiting object..");
-        lcd_line(1, "");
+        disp_msg("Waiting object..");
         while (!IR_PRESENT) { GPIOC->ODR ^= (1u<<13); delay_ms(120); }
 
-        lcd_line(0, "Object detected");
+        disp_msg("Object detected");
         GPIOC->BSRR = (1u<<13); delay_ms(400);
 
         uint16_t d = ultrasonic_cm();             /* distance in cm */
-        lcd_num(1, "Dist:", d);
+        disp_num("Dist cm: ", d);
         delay_ms(600);
 
         int16_t sh, el;
         float r = (float)d * 10.0f;               /* cm -> mm reach */
         ik(r, PICK_Z_MM, &sh, &el);
-        lcd_line(0, "Angle computed");
-        lcd_num(1, "Sh:", sh);
+        disp_msg("Angle computed");
+        disp_num("Shoulder: ", sh);
         delay_ms(700);
 
         /* ---- pick sequence (base fixed forward) ---- */
@@ -328,7 +299,7 @@ static void task1(void)
         set_angle(GRIPPER, GRIP_OPEN); move_settle(600);                     /* release */
         arm_home(); move_settle(900);
 
-        lcd_line(0, "Done. Reset obj");
+        disp_msg("Done. Reset obj");
         while (IR_PRESENT) delay_ms(150);         /* wait until object removed */
         delay_ms(400);
     }
@@ -342,16 +313,14 @@ static int rd_int(const char** p){ const char*s=*p; while(*s==' ')s++; if(*s<'0'
 static void task3(void)
 {
     arm_home();
-    lcd_line(0, "TASK3 WRITE");
-    lcd_line(1, "Waiting PC...");
-    uart_puts("READY\n");
+    uart_puts("READY\n");                          /* Task 3 keeps UART clean for the PC link */
     while (1) {
         if (rxready) {
             const char* p = (const char*)rxbuf + 1;
             if (rxbuf[0]=='A') {
                 int b=rd_int(&p), s=rd_int(&p), e=rd_int(&p), g=rd_int(&p);
                 if (b>=0&&s>=0&&e>=0&&g>=0){ set_angle(BASE,b); set_angle(SHOULDER,s);
-                    set_angle(ELBOW,e); set_angle(GRIPPER,g); uart_puts("OK\n"); lcd_line(1,"Writing..."); }
+                    set_angle(ELBOW,e); set_angle(GRIPPER,g); uart_puts("OK\n"); }
                 else uart_puts("ERR\n");
             } else if (rxbuf[0]=='H'){ arm_home(); uart_puts("OK\n"); }
             else uart_puts("ERR\n");
@@ -371,12 +340,9 @@ int main(void)
     adc_init();
     usart1_init();
     tim4_echo_init();
-    i2c1_init();
-    lcd_init();
 
-    lcd_line(0, "HASTHA  F401");
-    lcd_line(1, "Booting...");
-    delay_ms(800);
+    disp_msg("HASTHA F401 ready");
+    delay_ms(300);
 
 #if   ACTIVE_TASK == 1
     task1();

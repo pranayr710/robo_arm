@@ -35,13 +35,13 @@ RUN_GUIDE.md        <- this file
 | Potentiometer (10 kΩ) | Task 2 |
 | IR obstacle sensor | Task 1 |
 | HC-SR04 ultrasonic | Task 1 |
-| 16×2 I²C LCD (PCF8574) | Task 1 & 2 display *(see note)* |
+| 7-segment display *(optional)* | Task 1 & 2 output (status also on serial + LED) |
 | USB-to-Serial (CP2102) | Task 3 (PC link) |
 | Laptop webcam | Task 3 |
 | External **5 V** supply + 1000 µF cap | servo power |
 | Breadboard, jumpers, resistors | wiring |
 
-> **Display note:** the firmware prints status to a **16×2 I²C LCD**. If you don't connect one, the I²C calls will **hang**. Either connect an I²C LCD, or ask for the 7-segment/LED version of the display code.
+> **Display:** no LCD is needed — status prints over the **USB-serial** (open a serial monitor @115200) and blinks the onboard **PC13 LED**, so nothing hangs if no display is attached. A **7-segment display is optional**; `disp_num()` in `main.c` has a clearly-marked hook to drive one once you know its type (PB8/PB9 are free for it).
 
 ---
 
@@ -59,8 +59,7 @@ RUN_GUIDE.md        <- this file
 | Ultrasonic TRIG | **PB0** | HC-SR04 TRIG |
 | Ultrasonic ECHO | **PB6** | HC-SR04 ECHO (via 1 kΩ + 2 kΩ divider) |
 | IR sensor | **PB7** | IR module OUT |
-| LCD SCL | **PB8** | I²C LCD SCL |
-| LCD SDA | **PB9** | I²C LCD SDA |
+| (free) | **PB8 / PB9** | reserved for a 7-segment display |
 | Status LED | **PC13** | onboard |
 | Programmer | **PA13 / PA14** | ST-Link SWDIO / SWCLK |
 
@@ -74,16 +73,16 @@ Optional (only if you add the solar battery monitor):
 
 | Task | Pins involved |
 |------|---------------|
-| **Task 2** (pot → base) | PA4 (pot), PA0 (base servo), PB8/PB9 (LCD), PC13 |
-| **Task 1** (pick & place) | PA0–PA3 (servos), PB7 (IR), PB0/PB6 (ultrasonic), PB8/PB9 (LCD), PC13 |
+| **Task 2** (pot → base) | PA4 (pot), PA0 (base servo), PC13 (LED), serial |
+| **Task 1** (pick & place) | PA0–PA3 (servos), PB7 (IR), PB0/PB6 (ultrasonic), PC13 (LED), serial |
 | **Task 3** (blink write) | PA0–PA3 (servos), PA9/PA10 (serial to PC), PC13 |
 
 **Power rules (important):**
-- Servo V+ (red), LCD VCC, HC-SR04 VCC → **external 5 V rail** (never the board's 5 V pin).
+- Servo V+ (red), HC-SR04 VCC → **external 5 V rail** (never the board's 5 V pin).
 - Potentiometer VCC + IR sensor VCC → board **3.3 V** (PA4/PA5 are **not** 5 V-tolerant).
 - **All grounds common:** external-supply GND ↔ board GND ↔ every module GND.
 - Put a **1000 µF capacitor across the 5 V rail** (prevents servo brown-out resets).
-- 5 V-tolerant pins we rely on: **PB6, PB7, PB8, PB9**. Not 5 V-tolerant: PA0–PA5.
+- 5 V-tolerant pins we rely on: **PB6, PB7**. Not 5 V-tolerant: PA0–PA5.
 
 **Reserved Black Pill pins we deliberately avoid:** PA11/PA12 (USB), PC14/PC15 (32 kHz crystal), PH0/PH1 (main crystal), PB2 (BOOT1), PB11 (not on the 48-pin package).
 
@@ -100,7 +99,7 @@ Optional (only if you add the solar battery monitor):
    ```
 5. Build (**F7**). Connect ST-Link to the SWD pins (SWDIO=PA13, SWCLK=PA14, 3V3, GND).
    *(Alternative: flash over USB-C using DFU — hold BOOT0, use STM32CubeProgrammer.)*
-6. Flash (**Load / F8**). On boot the LCD shows `HASTHA F401 / Booting...`.
+6. Flash (**Load / F8**). On boot it prints `HASTHA F401 ready` on the serial monitor (115200).
 
 > To switch tasks, change `ACTIVE_TASK`, rebuild, and flash again.
 
@@ -112,7 +111,7 @@ Optional (only if you add the solar battery monitor):
 
 1. Set `#define ACTIVE_TASK 2`, build, flash.
 2. Power the servo rail (external 5 V).
-3. **Turn the potentiometer** → the **base servo** rotates 0°→180°. The LCD shows `Base: <angle>`.
+3. **Turn the potentiometer** → the **base servo** rotates 0°→180°. The serial monitor shows `Base: <angle>` (and the 7-seg once you add one).
 
 ✔ This proves your ADC + PWM + wiring + power are all correct. Do this first.
 
@@ -120,12 +119,12 @@ Optional (only if you add the solar battery monitor):
 
 ### ▶ Task 1 — Auto pick-and-place
 
-1. Set `#define ACTIVE_TASK 1`, build, flash. Wire the IR sensor, HC-SR04, LCD, and all 4 servos.
-2. On boot the arm homes and the LCD shows `Waiting object..`.
+1. Set `#define ACTIVE_TASK 1`, build, flash. Wire the IR sensor, HC-SR04, and all 4 servos.
+2. On boot the arm homes and the serial monitor shows `Waiting object..` (LED blinks).
 3. **Place an object** in front of the IR sensor:
-   - LCD → `Object detected`
-   - LCD → `Dist: <cm>` (ultrasonic reading)
-   - LCD → `Angle computed` + `Sh: <angle>`
+   - serial → `Object detected`
+   - serial → `Dist cm: <cm>` (ultrasonic reading)
+   - serial → `Angle computed` + `Shoulder: <angle>`
    - Arm **opens gripper → reaches down → grasps → lifts → rotates to drop → releases → homes**.
 4. Remove the object; it waits for the next one.
 
@@ -210,8 +209,7 @@ Serial protocol (what the PC sends to the F401): `A <base> <shoulder> <elbow> <g
 | Symptom | Fix |
 |---------|-----|
 | Board resets when servos move | Servos must be on the **external 5 V**, not the board; add the 1000 µF cap |
-| Program freezes at boot | I²C LCD not connected (I²C call hangs) — connect the LCD, or use the 7-seg version |
-| LCD blank / garbled | Try LCD address `0x3F` instead of `0x27` (`LCD_ADDR` in `main.c`); check SDA/SCL on PB9/PB8 |
+| No status output | Open a serial monitor at **115200** on the USB-serial COM port; the PC13 LED should also blink |
 | Servo jitters / wrong angle | Tune pulse range / `GRIP_*`; power supply too weak |
 | Garbage on serial | Baud must be **115200**, and share a common ground |
 | `ultrasonic` always 999 | Check TRIG on PB0, ECHO on PB6 via divider, VCC = 5 V |
